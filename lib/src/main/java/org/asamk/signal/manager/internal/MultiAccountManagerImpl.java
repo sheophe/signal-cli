@@ -113,7 +113,7 @@ public class MultiAccountManagerImpl implements MultiAccountManager {
     }
 
     private ProvisioningManager getNewProvisioningManager() {
-        return signalAccountFiles.initProvisioningManager(this::addManager);
+        return signalAccountFiles.initProvisioningManager();
     }
 
     @Override

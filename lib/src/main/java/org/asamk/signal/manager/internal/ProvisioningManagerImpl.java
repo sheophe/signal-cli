@@ -20,6 +20,7 @@ import org.asamk.signal.manager.Manager;
 import org.asamk.signal.manager.ProvisioningManager;
 import org.asamk.signal.manager.Settings;
 import org.asamk.signal.manager.api.DeviceLinkUrl;
+import org.asamk.signal.manager.api.ServiceEnvironment;
 import org.asamk.signal.manager.api.UserAlreadyExistsException;
 import org.asamk.signal.manager.config.ServiceConfig;
 import org.asamk.signal.manager.config.ServiceEnvironmentConfig;
@@ -40,6 +41,7 @@ import org.whispersystems.signalservice.internal.push.ConfirmCodeMessage;
 import org.whispersystems.signalservice.internal.util.DynamicCredentialsProvider;
 
 import java.io.IOException;
+import java.io.File;
 import java.net.URI;
 import java.nio.channels.OverlappingFileLockException;
 import java.util.concurrent.TimeoutException;
@@ -52,9 +54,10 @@ public class ProvisioningManagerImpl implements ProvisioningManager {
     private final static Logger logger = LoggerFactory.getLogger(ProvisioningManagerImpl.class);
 
     private final PathConfig pathConfig;
+    private final Settings settings;
+    private final ServiceEnvironment serviceEnvironment;
     private final ServiceEnvironmentConfig serviceEnvironmentConfig;
     private final String userAgent;
-    private final Consumer<Manager> newManagerListener;
     private final AccountsStore accountsStore;
 
     private final SignalServiceAccountManager accountManager;
@@ -63,22 +66,24 @@ public class ProvisioningManagerImpl implements ProvisioningManager {
 
     public ProvisioningManagerImpl(
             PathConfig pathConfig,
+            Settings settings,
+            ServiceEnvironment serviceEnvironment,
             ServiceEnvironmentConfig serviceEnvironmentConfig,
             String userAgent,
-            final Consumer<Manager> newManagerListener,
-            final AccountsStore accountsStore
-    ) {
+            final AccountsStore accountsStore) {
         this.pathConfig = pathConfig;
+        this.settings = settings;
+        this.serviceEnvironment = serviceEnvironment;
         this.serviceEnvironmentConfig = serviceEnvironmentConfig;
         this.userAgent = userAgent;
-        this.newManagerListener = newManagerListener;
         this.accountsStore = accountsStore;
 
         tempIdentityKey = KeyUtils.generateIdentityKeyPair();
         password = KeyUtils.createPassword();
         GroupsV2Operations groupsV2Operations;
         try {
-            groupsV2Operations = new GroupsV2Operations(ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()),
+            groupsV2Operations = new GroupsV2Operations(
+                    ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()),
                     ServiceConfig.GROUP_MAX_SIZE);
         } catch (Throwable ignored) {
             groupsV2Operations = null;
@@ -98,13 +103,27 @@ public class ProvisioningManagerImpl implements ProvisioningManager {
     }
 
     @Override
-    public String finishDeviceLink(String deviceName) throws IOException, TimeoutException, UserAlreadyExistsException {
+    public String finishDeviceLink(String deviceName, String configDir)
+            throws IOException, TimeoutException, UserAlreadyExistsException {
         var ret = accountManager.getNewDeviceRegistration(tempIdentityKey);
         var number = ret.getNumber();
         var aci = ret.getAci();
         var pni = ret.getPni();
 
         logger.info("Received link information from {}, linking in progress ...", number);
+
+        var pathConfig = PathConfig.createDefault(new File(configDir));
+        var accountsStore = new AccountsStore(pathConfig.dataPath(), serviceEnvironment, accountPath -> {
+            if (accountPath == null || !SignalAccount.accountFileExists(pathConfig.dataPath(), accountPath)) {
+                return null;
+            }
+
+            try {
+                return SignalAccount.load(pathConfig.dataPath(), accountPath, false, settings);
+            } catch (Exception e) {
+                return null;
+            }
+        });
 
         var accountPath = accountsStore.getPathByAci(aci);
         if (accountPath == null) {
@@ -185,10 +204,6 @@ public class ProvisioningManagerImpl implements ProvisioningManager {
                             e);
                 }
 
-                if (newManagerListener != null) {
-                    newManagerListener.accept(m);
-                    m = null;
-                }
                 return number;
             } finally {
                 if (m != null) {

@@ -11,7 +11,8 @@ import java.net.URISyntaxException;
 import java.util.concurrent.TimeoutException;
 
 /**
- * This class implements the ProvisioningManager interface using the DBus Signal interface, where possible.
+ * This class implements the ProvisioningManager interface using the DBus Signal
+ * interface, where possible.
  * It's used for the signal-cli dbus client mode (--dbus, --dbus-system)
  */
 public class DbusProvisioningManagerImpl implements ProvisioningManager {
@@ -27,8 +28,7 @@ public class DbusProvisioningManagerImpl implements ProvisioningManager {
     }
 
     public DbusProvisioningManagerImpl(
-            final SignalControl signalControl, DBusConnection connection, URI deviceLinkUri
-    ) {
+            final SignalControl signalControl, DBusConnection connection, URI deviceLinkUri) {
         this.signalControl = signalControl;
         this.connection = connection;
         this.deviceLinkUri = deviceLinkUri;
@@ -45,7 +45,8 @@ public class DbusProvisioningManagerImpl implements ProvisioningManager {
     }
 
     @Override
-    public String finishDeviceLink(final String deviceName) throws IOException, TimeoutException, UserAlreadyExistsException {
-        return signalControl.finishLink(deviceLinkUri.toString(), deviceName);
+    public String finishDeviceLink(final String deviceName, final String configPath)
+            throws IOException, TimeoutException, UserAlreadyExistsException {
+        return signalControl.finishLink(deviceLinkUri.toString(), deviceName, configPath);
     }
 }

@@ -39,8 +39,7 @@ public class SignalAccountFiles {
             final File settingsPath,
             final ServiceEnvironment serviceEnvironment,
             final String userAgent,
-            final Settings settings
-    ) throws IOException {
+            final Settings settings) throws IOException {
         this.pathConfig = PathConfig.createDefault(settingsPath);
         this.serviceEnvironment = serviceEnvironment;
         this.serviceEnvironmentConfig = ServiceConfig.getServiceEnvironmentConfig(this.serviceEnvironment, userAgent);
@@ -85,8 +84,7 @@ public class SignalAccountFiles {
     }
 
     private Manager initManager(
-            String number, String accountPath
-    ) throws IOException, NotRegisteredException, AccountCheckException {
+            String number, String accountPath) throws IOException, NotRegisteredException, AccountCheckException {
         if (accountPath == null) {
             throw new NotRegisteredException();
         }
@@ -136,14 +134,11 @@ public class SignalAccountFiles {
     }
 
     public ProvisioningManager initProvisioningManager() {
-        return initProvisioningManager(null);
-    }
-
-    public ProvisioningManager initProvisioningManager(Consumer<Manager> newManagerListener) {
         return new ProvisioningManagerImpl(pathConfig,
+                settings,
+                serviceEnvironment,
                 serviceEnvironmentConfig,
                 userAgent,
-                newManagerListener,
                 accountsStore);
     }
 
@@ -152,8 +147,7 @@ public class SignalAccountFiles {
     }
 
     public RegistrationManager initRegistrationManager(
-            String number, Consumer<Manager> newManagerListener
-    ) throws IOException {
+            String number, Consumer<Manager> newManagerListener) throws IOException {
         final var accountPath = accountsStore.getPathByNumber(number);
         if (accountPath == null || !SignalAccount.accountFileExists(pathConfig.dataPath(), accountPath)) {
             final var newAccountPath = accountPath == null ? accountsStore.addAccount(number, null) : accountPath;

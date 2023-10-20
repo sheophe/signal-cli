@@ -45,15 +45,14 @@ public class DbusSignalControlImpl implements org.asamk.SignalControl {
 
     @Override
     public void register(
-            final String number, final boolean voiceVerification
-    ) throws Error.Failure, Error.InvalidNumber {
+            final String number, final boolean voiceVerification) throws Error.Failure, Error.InvalidNumber {
         registerWithCaptcha(number, voiceVerification, null);
     }
 
     @Override
     public void registerWithCaptcha(
-            final String number, final boolean voiceVerification, final String captcha
-    ) throws Error.Failure, Error.InvalidNumber {
+            final String number, final boolean voiceVerification, final String captcha)
+            throws Error.Failure, Error.InvalidNumber {
         if (!Manager.isValidNumber(number, null)) {
             throw new SignalControl.Error.InvalidNumber(
                     "Invalid account (phone number), make sure you include the country code.");
@@ -82,8 +81,8 @@ public class DbusSignalControlImpl implements org.asamk.SignalControl {
 
     @Override
     public void verifyWithPin(
-            final String number, final String verificationCode, final String pin
-    ) throws Error.Failure, Error.InvalidNumber {
+            final String number, final String verificationCode, final String pin)
+            throws Error.Failure, Error.InvalidNumber {
         try (final RegistrationManager registrationManager = c.getNewRegistrationManager(number)) {
             registrationManager.verifyAccount(verificationCode, pin);
         } catch (OverlappingFileLockException e) {
@@ -100,13 +99,13 @@ public class DbusSignalControlImpl implements org.asamk.SignalControl {
     }
 
     @Override
-    public String link(final String newDeviceName) throws Error.Failure {
+    public String link(final String newDeviceName, final String configPath) throws Error.Failure {
         try {
             final URI deviceLinkUri = c.getNewProvisioningDeviceLinkUri();
             final var thread = new Thread(() -> {
                 final ProvisioningManager provisioningManager = c.getProvisioningManagerFor(deviceLinkUri);
                 try {
-                    provisioningManager.finishDeviceLink(newDeviceName);
+                    provisioningManager.finishDeviceLink(newDeviceName, configPath);
                 } catch (IOException | TimeoutException | UserAlreadyExistsException e) {
                     e.printStackTrace();
                 }
@@ -130,10 +129,11 @@ public class DbusSignalControlImpl implements org.asamk.SignalControl {
     }
 
     @Override
-    public String finishLink(String deviceLinkUri, final String newDeviceName) throws Error.Failure {
+    public String finishLink(String deviceLinkUri, final String newDeviceName, final String configPath)
+            throws Error.Failure {
         try {
             final var provisioningManager = c.getProvisioningManagerFor(new URI(deviceLinkUri));
-            return provisioningManager.finishDeviceLink(newDeviceName);
+            return provisioningManager.finishDeviceLink(newDeviceName, configPath);
         } catch (TimeoutException | IOException | UserAlreadyExistsException | URISyntaxException e) {
             throw new SignalControl.Error.Failure(e.getClass().getSimpleName() + " " + e.getMessage());
         }

@@ -33,17 +33,18 @@ public class LinkCommand implements ProvisioningCommand {
 
     @Override
     public void handleCommand(
-            final Namespace ns, final ProvisioningManager m, final OutputWriter outputWriter
-    ) throws CommandException {
+            final Namespace ns, final ProvisioningManager m, final OutputWriter outputWriter) throws CommandException {
         final var writer = (PlainTextWriter) outputWriter;
 
         var deviceName = ns.getString("name");
         if (deviceName == null) {
             deviceName = "cli";
         }
+
+        var configPath = ns.getString("config");
         try {
             writer.println("{}", m.getDeviceLinkUri());
-            var number = m.finishDeviceLink(deviceName);
+            var number = m.finishDeviceLink(deviceName, configPath);
             writer.println("Associated with: {}", number);
         } catch (TimeoutException e) {
             throw new UserErrorException("Link request timed out, please try again.");

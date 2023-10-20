@@ -10,5 +10,6 @@ public interface ProvisioningManager {
 
     URI getDeviceLinkUri() throws TimeoutException, IOException;
 
-    String finishDeviceLink(String deviceName) throws IOException, TimeoutException, UserAlreadyExistsException;
+    String finishDeviceLink(String deviceName, String configPath)
+            throws IOException, TimeoutException, UserAlreadyExistsException;
 }
