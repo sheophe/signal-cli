@@ -55,7 +55,7 @@ public class FinishLinkCommand implements JsonRpcMultiCommand<FinishLinkCommand.
         }
         final String number;
         try {
-            number = provisioningManager.finishDeviceLink(deviceName, request.configPath());
+            number = provisioningManager.finishDeviceLink(deviceName, request.configDir());
         } catch (TimeoutException e) {
             throw new UserErrorException("Link request timed out, please try again.");
         } catch (IOException e) {
@@ -75,7 +75,7 @@ public class FinishLinkCommand implements JsonRpcMultiCommand<FinishLinkCommand.
         jsonWriter.write(new JsonFinishLink(number));
     }
 
-    public record FinishLinkParams(String deviceLinkUri, String deviceName, String configPath) {
+    public record FinishLinkParams(String deviceLinkUri, String deviceName, String configDir) {
     }
 
     private record JsonFinishLink(String number) {

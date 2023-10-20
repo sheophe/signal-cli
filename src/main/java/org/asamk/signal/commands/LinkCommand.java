@@ -41,10 +41,10 @@ public class LinkCommand implements ProvisioningCommand {
             deviceName = "cli";
         }
 
-        var configPath = ns.getString("config");
+        var configDir = ns.getString("config");
         try {
             writer.println("{}", m.getDeviceLinkUri());
-            var number = m.finishDeviceLink(deviceName, configPath);
+            var number = m.finishDeviceLink(deviceName, configDir);
             writer.println("Associated with: {}", number);
         } catch (TimeoutException e) {
             throw new UserErrorException("Link request timed out, please try again.");
