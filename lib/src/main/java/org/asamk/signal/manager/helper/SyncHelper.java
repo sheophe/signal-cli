@@ -47,7 +47,7 @@ import java.util.stream.Stream;
 
 public class SyncHelper {
 
-    private final static Logger logger = LoggerFactory.getLogger(SyncHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(SyncHelper.class);
 
     private final Context context;
     private final SignalAccount account;
@@ -148,11 +148,11 @@ public class SyncHelper {
                     out.write(new DeviceContact(address,
                             Optional.ofNullable(contact.getName()),
                             createContactAvatarAttachment(new RecipientAddress(address)),
-                            Optional.ofNullable(contact.getColor()),
+                            Optional.ofNullable(contact.color()),
                             Optional.ofNullable(verifiedMessage),
                             Optional.ofNullable(profileKey),
                             contact.isBlocked(),
-                            Optional.of(contact.getMessageExpirationTime()),
+                            Optional.of(contact.messageExpirationTime()),
                             Optional.empty(),
                             contact.isArchived()));
                 }
@@ -222,7 +222,8 @@ public class SyncHelper {
     }
 
     public SendMessageResult sendKeysMessage() {
-        var keysMessage = new KeysMessage(Optional.ofNullable(account.getStorageKey()));
+        var keysMessage = new KeysMessage(Optional.ofNullable(account.getStorageKey()),
+                Optional.ofNullable(account.getOrCreatePinMasterKey()));
         return context.getSendHelper().sendSyncMessage(SignalServiceSyncMessage.forKeys(keysMessage));
     }
 
@@ -338,8 +339,8 @@ public class SyncHelper {
             if (c.getExpirationTimer().isPresent()) {
                 builder.withMessageExpirationTime(c.getExpirationTimer().get());
             }
-            builder.withBlocked(c.isBlocked());
-            builder.withArchived(c.isArchived());
+            builder.withIsBlocked(c.isBlocked());
+            builder.withIsArchived(c.isArchived());
             account.getContactStore().storeContact(recipientId, builder.build());
 
             if (c.getAvatar().isPresent()) {

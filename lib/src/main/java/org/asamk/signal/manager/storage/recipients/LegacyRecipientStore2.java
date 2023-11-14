@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 public class LegacyRecipientStore2 {
 
-    private final static Logger logger = LoggerFactory.getLogger(LegacyRecipientStore2.class);
+    private static final Logger logger = LoggerFactory.getLogger(LegacyRecipientStore2.class);
 
     public static void migrate(File file, RecipientStore recipientStore) {
         final var objectMapper = Utils.createStorageObjectMapper();
@@ -44,7 +44,8 @@ public class LegacyRecipientStore2 {
                             r.contact.messageExpirationTime,
                             r.contact.blocked,
                             r.contact.archived,
-                            r.contact.profileSharingEnabled);
+                            r.contact.profileSharingEnabled,
+                            false);
                 }
 
                 ProfileKey profileKey = null;

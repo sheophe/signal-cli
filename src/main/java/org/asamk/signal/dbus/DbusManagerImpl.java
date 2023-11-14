@@ -3,6 +3,7 @@ package org.asamk.signal.dbus;
 import org.asamk.Signal;
 import org.asamk.signal.DbusConfig;
 import org.asamk.signal.manager.Manager;
+import org.asamk.signal.manager.api.AlreadyReceivingException;
 import org.asamk.signal.manager.api.AttachmentInvalidException;
 import org.asamk.signal.manager.api.CaptchaRequiredException;
 import org.asamk.signal.manager.api.Configuration;
@@ -49,6 +50,7 @@ import org.freedesktop.dbus.DBusMap;
 import org.freedesktop.dbus.DBusPath;
 import org.freedesktop.dbus.connections.impl.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
+import org.freedesktop.dbus.exceptions.DBusExecutionException;
 import org.freedesktop.dbus.interfaces.DBusInterface;
 import org.freedesktop.dbus.interfaces.DBusSigHandler;
 import org.freedesktop.dbus.types.Variant;
@@ -341,8 +343,13 @@ public class DbusManagerImpl implements Manager {
 
     @Override
     public Pair<GroupId, SendGroupMessageResults> joinGroup(final GroupInviteLinkUrl inviteLinkUrl) throws IOException, InactiveGroupLinkException {
-        final var newGroupId = signal.joinGroup(inviteLinkUrl.getUrl());
-        return new Pair<>(GroupId.unknownVersion(newGroupId), new SendGroupMessageResults(0, List.of()));
+        try {
+            final var newGroupId = signal.joinGroup(inviteLinkUrl.getUrl());
+            return new Pair<>(GroupId.unknownVersion(newGroupId), new SendGroupMessageResults(0, List.of()));
+        } catch (DBusExecutionException e) {
+            throw new IOException("Failed to join group: " + e.getMessage() + " (" + e.getClass().getSimpleName() + ")",
+                    e);
+        }
     }
 
     @Override
@@ -443,6 +450,10 @@ public class DbusManagerImpl implements Manager {
     public SendMessageResults sendEndSessionMessage(final Set<RecipientIdentifier.Single> recipients) throws IOException {
         signal.sendEndSessionMessage(recipients.stream().map(RecipientIdentifier.Single::getIdentifier).toList());
         return new SendMessageResults(0, Map.of());
+    }
+
+    public void hideRecipient(final RecipientIdentifier.Single recipient) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -548,10 +559,17 @@ public class DbusManagerImpl implements Manager {
         }
     }
 
+    private Thread receiveThread;
+
     @Override
     public void receiveMessages(
             Optional<Duration> timeout, Optional<Integer> maxMessages, ReceiveMessageHandler handler
-    ) throws IOException {
+    ) throws IOException, AlreadyReceivingException {
+        if (receiveThread != null) {
+            throw new AlreadyReceivingException("Already receiving message.");
+        }
+        receiveThread = Thread.currentThread();
+
         final var remainingMessages = new AtomicInteger(maxMessages.orElse(-1));
         final var lastMessage = new AtomicLong(System.currentTimeMillis());
         final var thread = Thread.currentThread();
@@ -577,6 +595,7 @@ public class DbusManagerImpl implements Manager {
                     }
                     Thread.sleep(sleepTimeRemaining);
                 } catch (InterruptedException ignored) {
+                    break;
                 }
             }
         } else {
@@ -589,6 +608,14 @@ public class DbusManagerImpl implements Manager {
         }
 
         removeReceiveHandler(receiveHandler);
+        receiveThread = null;
+    }
+
+    @Override
+    public void stopReceiveMessages() {
+        if (receiveThread != null) {
+            receiveThread.interrupt();
+        }
     }
 
     @Override
@@ -630,7 +657,7 @@ public class DbusManagerImpl implements Manager {
             }
             return Recipient.newBuilder()
                     .withAddress(new RecipientAddress(null, n))
-                    .withContact(new Contact(contactName, null, null, 0, contactBlocked, false, false))
+                    .withContact(new Contact(contactName, null, null, 0, contactBlocked, false, false, false))
                     .build();
         }).filter(Objects::nonNull).toList();
     }
@@ -948,7 +975,7 @@ public class DbusManagerImpl implements Manager {
             };
             connection.addSigHandler(Signal.SyncMessageReceivedV2.class, signal, this.dbusSyncHandler);
         } catch (DBusException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
         signal.subscribeReceive();
     }
@@ -968,7 +995,7 @@ public class DbusManagerImpl implements Manager {
             connection.removeSigHandler(Signal.ReceiptReceivedV2.class, signal, this.dbusRcptHandler);
             connection.removeSigHandler(Signal.SyncMessageReceivedV2.class, signal, this.dbusSyncHandler);
         } catch (DBusException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 

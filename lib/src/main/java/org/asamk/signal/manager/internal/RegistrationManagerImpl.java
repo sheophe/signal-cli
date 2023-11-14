@@ -45,7 +45,6 @@ import org.whispersystems.signalservice.api.push.ServiceIdType;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.api.push.exceptions.AlreadyVerifiedException;
 import org.whispersystems.signalservice.api.push.exceptions.DeprecatedVersionException;
-import org.whispersystems.signalservice.api.svr.SecureValueRecoveryV1;
 import org.whispersystems.signalservice.internal.push.VerifyAccountResponse;
 import org.whispersystems.signalservice.internal.util.DynamicCredentialsProvider;
 
@@ -54,7 +53,7 @@ import java.util.function.Consumer;
 
 public class RegistrationManagerImpl implements RegistrationManager {
 
-    private final static Logger logger = LoggerFactory.getLogger(RegistrationManagerImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(RegistrationManagerImpl.class);
 
     private SignalAccount account;
     private final PathConfig pathConfig;
@@ -95,23 +94,8 @@ public class RegistrationManagerImpl implements RegistrationManager {
                 userAgent,
                 groupsV2Operations,
                 ServiceConfig.AUTOMATIC_NETWORK_RETRY);
-        final var keyBackupService = accountManager.getKeyBackupService(ServiceConfig.getIasKeyStore(),
-                serviceEnvironmentConfig.keyBackupConfig().enclaveName(),
-                serviceEnvironmentConfig.keyBackupConfig().serviceId(),
-                serviceEnvironmentConfig.keyBackupConfig().mrenclave(),
-                10);
-        final var fallbackKeyBackupServices = serviceEnvironmentConfig.fallbackKeyBackupConfigs()
-                .stream()
-                .map(config -> accountManager.getKeyBackupService(ServiceConfig.getIasKeyStore(),
-                        config.enclaveName(),
-                        config.serviceId(),
-                        config.mrenclave(),
-                        10))
-                .toList();
         final var secureValueRecoveryV2 = accountManager.getSecureValueRecoveryV2(serviceEnvironmentConfig.svr2Mrenclave());
-        this.pinHelper = new PinHelper(new SecureValueRecoveryV1(keyBackupService),
-                secureValueRecoveryV2,
-                fallbackKeyBackupServices);
+        this.pinHelper = new PinHelper(secureValueRecoveryV2);
     }
 
     @Override
@@ -145,6 +129,10 @@ public class RegistrationManagerImpl implements RegistrationManager {
     public void verifyAccount(
             String verificationCode, String pin
     ) throws IOException, PinLockedException, IncorrectPinException {
+        if (account.isRegistered()) {
+            throw new IOException("Account is already registered");
+        }
+
         if (account.getPniIdentityKeyPair() == null) {
             account.setPniIdentityKeyPair(KeyUtils.generateIdentityKeyPair());
         }

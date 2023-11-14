@@ -15,6 +15,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
@@ -34,7 +35,7 @@ import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
 
 public class IOUtils {
 
-    private final static Logger logger = LoggerFactory.getLogger(IOUtils.class);
+    private static final Logger logger = LoggerFactory.getLogger(IOUtils.class);
 
     private IOUtils() {
     }
@@ -93,6 +94,9 @@ public class IOUtils {
         return () -> {
             try {
                 return bufferedReader.readLine();
+            } catch (ClosedChannelException ignored) {
+                logger.trace("Line supplier has been interrupted.");
+                return null;
             } catch (IOException e) {
                 logger.error("Error occurred while reading line", e);
                 return null;
@@ -138,7 +142,7 @@ public class IOUtils {
                     ? ServerSocketChannel.open(StandardProtocolFamily.UNIX)
                     : ServerSocketChannel.open();
             serverChannel.bind(address);
-            logger.info("Listening on socket: " + address);
+            logger.debug("Listening on socket: " + address);
             postBind(address);
         } catch (IOException e) {
             throw new IOErrorException("Failed to bind socket " + address + ": " + e.getMessage(), e);

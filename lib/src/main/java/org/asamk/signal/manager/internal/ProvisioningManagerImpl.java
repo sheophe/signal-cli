@@ -51,7 +51,7 @@ import static org.asamk.signal.manager.config.ServiceConfig.getCapabilities;
 
 public class ProvisioningManagerImpl implements ProvisioningManager {
 
-    private final static Logger logger = LoggerFactory.getLogger(ProvisioningManagerImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(ProvisioningManagerImpl.class);
 
     private final PathConfig pathConfig;
     private final Settings settings;
@@ -80,14 +80,8 @@ public class ProvisioningManagerImpl implements ProvisioningManager {
 
         tempIdentityKey = KeyUtils.generateIdentityKeyPair();
         password = KeyUtils.createPassword();
-        GroupsV2Operations groupsV2Operations;
-        try {
-            groupsV2Operations = new GroupsV2Operations(
-                    ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()),
-                    ServiceConfig.GROUP_MAX_SIZE);
-        } catch (Throwable ignored) {
-            groupsV2Operations = null;
-        }
+        GroupsV2Operations groupsV2Operations = new GroupsV2Operations(ClientZkOperations.create(
+                serviceEnvironmentConfig.signalServiceConfiguration()), ServiceConfig.GROUP_MAX_SIZE);
         accountManager = new SignalServiceAccountManager(serviceEnvironmentConfig.signalServiceConfiguration(),
                 new DynamicCredentialsProvider(null, null, null, password, SignalServiceAddress.DEFAULT_DEVICE_ID),
                 userAgent,

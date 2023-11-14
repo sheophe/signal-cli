@@ -109,7 +109,7 @@ import static org.asamk.signal.manager.config.ServiceConfig.getCapabilities;
 
 public class SignalAccount implements Closeable {
 
-    private final static Logger logger = LoggerFactory.getLogger(SignalAccount.class);
+    private static final Logger logger = LoggerFactory.getLogger(SignalAccount.class);
 
     private static final int MINIMUM_STORAGE_VERSION = 1;
     private static final int CURRENT_STORAGE_VERSION = 8;
@@ -228,6 +228,7 @@ public class SignalAccount implements Closeable {
         signalAccount.pniAccountData.setIdentityKeyPair(pniIdentityKey);
         signalAccount.aciAccountData.setLocalRegistrationId(KeyHelper.generateRegistrationId(false));
         signalAccount.pniAccountData.setLocalRegistrationId(KeyHelper.generateRegistrationId(false));
+        signalAccount.initAllPreKeyIds();
         signalAccount.settings = settings;
 
         signalAccount.registered = false;
@@ -281,7 +282,6 @@ public class SignalAccount implements Closeable {
         getRecipientTrustedResolver().resolveSelfRecipientTrusted(getSelfRecipientAddress());
         this.password = password;
         this.profileKey = profileKey;
-        getProfileStore().storeSelfProfileKey(getSelfRecipientId(), getProfileKey());
         this.encryptedDeviceName = encryptedDeviceName;
         this.aciAccountData.setIdentityKeyPair(aciIdentity);
         this.pniAccountData.setIdentityKeyPair(pniIdentity);
@@ -653,14 +653,11 @@ public class SignalAccount implements Closeable {
             // Old config file, creating new profile key
             setProfileKey(KeyUtils.createProfileKey());
         }
-        getProfileStore().storeProfileKey(getSelfRecipientId(), getProfileKey());
 
         if (previousStorageVersion < 5) {
             final var legacyRecipientsStoreFile = new File(userPath, "recipients-store");
             if (legacyRecipientsStoreFile.exists()) {
                 LegacyRecipientStore2.migrate(legacyRecipientsStoreFile, getRecipientStore());
-                // Ensure our profile key is stored in profile store
-                getProfileStore().storeSelfProfileKey(getSelfRecipientId(), getProfileKey());
             }
         }
         if (previousStorageVersion < 6) {
@@ -825,6 +822,7 @@ public class SignalAccount implements Closeable {
                                 contact.messageExpirationTime,
                                 contact.blocked,
                                 contact.archived,
+                                false,
                                 false));
 
                 // Store profile keys only in profile store
@@ -972,6 +970,13 @@ public class SignalAccount implements Closeable {
     private void clearAllPreKeys() {
         clearAllPreKeys(ServiceIdType.ACI);
         clearAllPreKeys(ServiceIdType.PNI);
+    }
+
+    private void initAllPreKeyIds() {
+        resetPreKeyOffsets(ServiceIdType.ACI);
+        resetPreKeyOffsets(ServiceIdType.PNI);
+        resetKyberPreKeyOffsets(ServiceIdType.ACI);
+        resetKyberPreKeyOffsets(ServiceIdType.PNI);
     }
 
     private void clearAllPreKeys(ServiceIdType serviceIdType) {
@@ -1180,6 +1185,7 @@ public class SignalAccount implements Closeable {
         return getOrCreate(() -> recipientStore,
                 () -> recipientStore = new RecipientStore(this::mergeRecipients,
                         this::getSelfRecipientAddress,
+                        this::getProfileKey,
                         getAccountDatabase()));
     }
 
@@ -1537,7 +1543,6 @@ public class SignalAccount implements Closeable {
         }
         this.profileKey = profileKey;
         save();
-        getProfileStore().storeSelfProfileKey(getSelfRecipientId(), getProfileKey());
     }
 
     public byte[] getSelfUnidentifiedAccessKey() {

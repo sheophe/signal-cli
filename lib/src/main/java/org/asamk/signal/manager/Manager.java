@@ -193,6 +193,8 @@ public interface Manager extends Closeable {
 
     SendMessageResults sendEndSessionMessage(Set<RecipientIdentifier.Single> recipients) throws IOException;
 
+    void hideRecipient(RecipientIdentifier.Single recipient);
+
     void deleteRecipient(RecipientIdentifier.Single recipient);
 
     void deleteContact(RecipientIdentifier.Single recipient);
@@ -254,6 +256,8 @@ public interface Manager extends Closeable {
     void receiveMessages(
             Optional<Duration> timeout, Optional<Integer> maxMessages, ReceiveMessageHandler handler
     ) throws IOException, AlreadyReceivingException;
+
+    void stopReceiveMessages();
 
     void setReceiveConfig(ReceiveConfig receiveConfig);
 

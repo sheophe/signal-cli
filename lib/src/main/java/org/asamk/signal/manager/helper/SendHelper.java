@@ -56,7 +56,7 @@ import okio.ByteString;
 
 public class SendHelper {
 
-    private final static Logger logger = LoggerFactory.getLogger(SendHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(SendHelper.class);
 
     private final SignalAccount account;
     private final SignalDependencies dependencies;
@@ -78,13 +78,13 @@ public class SendHelper {
             Optional<Long> editTargetTimestamp
     ) {
         var contact = account.getContactStore().getContact(recipientId);
-        if (contact == null || !contact.isProfileSharingEnabled()) {
+        if (contact == null || !contact.isProfileSharingEnabled() || contact.isHidden()) {
             final var contactBuilder = contact == null ? Contact.newBuilder() : Contact.newBuilder(contact);
-            contact = contactBuilder.withProfileSharingEnabled(true).build();
+            contact = contactBuilder.withIsProfileSharingEnabled(true).withIsHidden(false).build();
             account.getContactStore().storeContact(recipientId, contact);
         }
 
-        final var expirationTime = contact.getMessageExpirationTime();
+        final var expirationTime = contact.messageExpirationTime();
         messageBuilder.withExpiration(expirationTime);
 
         if (!contact.isBlocked()) {
@@ -177,7 +177,7 @@ public class SendHelper {
     ) {
         final var recipientId = account.getSelfRecipientId();
         final var contact = account.getContactStore().getContact(recipientId);
-        final var expirationTime = contact != null ? contact.getMessageExpirationTime() : 0;
+        final var expirationTime = contact != null ? contact.messageExpirationTime() : 0;
         messageBuilder.withExpiration(expirationTime);
 
         var message = messageBuilder.build();

@@ -62,7 +62,7 @@ import java.util.Set;
 
 public class GroupHelper {
 
-    private final static Logger logger = LoggerFactory.getLogger(GroupHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(GroupHelper.class);
 
     private final SignalAccount account;
     private final SignalDependencies dependencies;
@@ -107,23 +107,8 @@ public class GroupHelper {
     ) {
         final var groupSecretParams = GroupSecretParams.deriveFromMasterKey(groupMasterKey);
 
-        var groupId = GroupUtils.getGroupIdV2(groupSecretParams);
-        var groupInfo = getGroup(groupId);
-        final GroupInfoV2 groupInfoV2;
-        if (groupInfo instanceof GroupInfoV1) {
-            // Received a v2 group message for a v1 group, we need to locally migrate the group
-            account.getGroupStore().deleteGroup(((GroupInfoV1) groupInfo).getGroupId());
-            groupInfoV2 = new GroupInfoV2(groupId, groupMasterKey, account.getRecipientResolver());
-            groupInfoV2.setBlocked(groupInfo.isBlocked());
-            account.getGroupStore().updateGroup(groupInfoV2);
-            logger.info("Locally migrated group {} to group v2, id: {}",
-                    groupInfo.getGroupId().toBase64(),
-                    groupInfoV2.getGroupId().toBase64());
-        } else if (groupInfo instanceof GroupInfoV2) {
-            groupInfoV2 = (GroupInfoV2) groupInfo;
-        } else {
-            groupInfoV2 = new GroupInfoV2(groupId, groupMasterKey, account.getRecipientResolver());
-        }
+        final var groupId = GroupUtils.getGroupIdV2(groupSecretParams);
+        final var groupInfoV2 = account.getGroupStore().getGroupOrPartialMigrate(groupMasterKey, groupId);
 
         if (groupInfoV2.getGroup() == null || groupInfoV2.getGroup().revision < revision) {
             DecryptedGroup group = null;
@@ -224,52 +209,55 @@ public class GroupHelper {
         var group = getGroupForUpdating(groupId);
         final var avatarBytes = readAvatarBytes(avatarFile);
 
-        if (group instanceof GroupInfoV2) {
-            try {
-                return updateGroupV2((GroupInfoV2) group,
-                        name,
-                        description,
-                        members,
-                        removeMembers,
-                        admins,
-                        removeAdmins,
-                        banMembers,
-                        unbanMembers,
-                        resetGroupLink,
-                        groupLinkState,
-                        addMemberPermission,
-                        editDetailsPermission,
-                        avatarBytes,
-                        expirationTimer,
-                        isAnnouncementGroup);
-            } catch (ConflictException e) {
-                // Detected conflicting update, refreshing group and trying again
-                group = getGroup(groupId, true);
-                return updateGroupV2((GroupInfoV2) group,
-                        name,
-                        description,
-                        members,
-                        removeMembers,
-                        admins,
-                        removeAdmins,
-                        banMembers,
-                        unbanMembers,
-                        resetGroupLink,
-                        groupLinkState,
-                        addMemberPermission,
-                        editDetailsPermission,
-                        avatarBytes,
-                        expirationTimer,
-                        isAnnouncementGroup);
+        switch (group) {
+            case GroupInfoV2 gv2 -> {
+                try {
+                    return updateGroupV2(gv2,
+                            name,
+                            description,
+                            members,
+                            removeMembers,
+                            admins,
+                            removeAdmins,
+                            banMembers,
+                            unbanMembers,
+                            resetGroupLink,
+                            groupLinkState,
+                            addMemberPermission,
+                            editDetailsPermission,
+                            avatarBytes,
+                            expirationTimer,
+                            isAnnouncementGroup);
+                } catch (ConflictException e) {
+                    // Detected conflicting update, refreshing group and trying again
+                    group = getGroup(groupId, true);
+                    return updateGroupV2((GroupInfoV2) group,
+                            name,
+                            description,
+                            members,
+                            removeMembers,
+                            admins,
+                            removeAdmins,
+                            banMembers,
+                            unbanMembers,
+                            resetGroupLink,
+                            groupLinkState,
+                            addMemberPermission,
+                            editDetailsPermission,
+                            avatarBytes,
+                            expirationTimer,
+                            isAnnouncementGroup);
+                }
+            }
+
+            case GroupInfoV1 gv1 -> {
+                final var result = updateGroupV1(gv1, name, members, avatarBytes);
+                if (expirationTimer != null) {
+                    setExpirationTimer(gv1, expirationTimer);
+                }
+                return result;
             }
         }
-
-        final var gv1 = (GroupInfoV1) group;
-        final var result = updateGroupV1(gv1, name, members, avatarBytes);
-        if (expirationTimer != null) {
-            setExpirationTimer(gv1, expirationTimer);
-        }
-        return result;
     }
 
     public void updateGroupProfileKey(GroupIdV2 groupId) throws GroupNotFoundException, NotAGroupMemberException, IOException {

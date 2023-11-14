@@ -6,6 +6,8 @@ import org.asamk.signal.manager.api.PhoneNumberSharingMode;
 import org.asamk.signal.manager.api.Profile;
 import org.asamk.signal.manager.api.TrustLevel;
 import org.asamk.signal.manager.internal.SignalDependencies;
+import org.asamk.signal.manager.jobs.CheckWhoAmIJob;
+import org.asamk.signal.manager.jobs.DownloadProfileAvatarJob;
 import org.asamk.signal.manager.storage.SignalAccount;
 import org.asamk.signal.manager.storage.recipients.RecipientAddress;
 import org.signal.libsignal.protocol.IdentityKey;
@@ -31,7 +33,7 @@ import java.util.stream.Collectors;
 
 public class StorageHelper {
 
-    private final static Logger logger = LoggerFactory.getLogger(StorageHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(StorageHelper.class);
 
     private final SignalAccount account;
     private final SignalDependencies dependencies;
@@ -116,11 +118,13 @@ public class StorageHelper {
         final var blocked = contact != null && contact.isBlocked();
         final var profileShared = contact != null && contact.isProfileSharingEnabled();
         final var archived = contact != null && contact.isArchived();
-        final var contactGivenName = contact == null ? null : contact.getGivenName();
-        final var contactFamilyName = contact == null ? null : contact.getFamilyName();
+        final var hidden = contact != null && contact.isHidden();
+        final var contactGivenName = contact == null ? null : contact.givenName();
+        final var contactFamilyName = contact == null ? null : contact.familyName();
         if (blocked != contactRecord.isBlocked()
                 || profileShared != contactRecord.isProfileSharingEnabled()
                 || archived != contactRecord.isArchived()
+                || hidden != contactRecord.isHidden()
                 || (
                 contactRecord.getSystemGivenName().isPresent() && !contactRecord.getSystemGivenName()
                         .get()
@@ -133,9 +137,10 @@ public class StorageHelper {
         )) {
             logger.debug("Storing new or updated contact {}", recipientId);
             final var contactBuilder = contact == null ? Contact.newBuilder() : Contact.newBuilder(contact);
-            final var newContact = contactBuilder.withBlocked(contactRecord.isBlocked())
-                    .withProfileSharingEnabled(contactRecord.isProfileSharingEnabled())
-                    .withArchived(contactRecord.isArchived());
+            final var newContact = contactBuilder.withIsBlocked(contactRecord.isBlocked())
+                    .withIsProfileSharingEnabled(contactRecord.isProfileSharingEnabled())
+                    .withIsArchived(contactRecord.isArchived())
+                    .withIsHidden(contactRecord.isHidden());
             if (contactRecord.getSystemGivenName().isPresent() || contactRecord.getSystemFamilyName().isPresent()) {
                 newContact.withGivenName(contactRecord.getSystemGivenName().orElse(null))
                         .withFamilyName(contactRecord.getSystemFamilyName().orElse(null));
@@ -247,7 +252,7 @@ public class StorageHelper {
         }
 
         if (!accountRecord.getE164().equals(account.getNumber())) {
-            context.getAccountHelper().checkWhoAmiI();
+            context.getJobExecutor().enqueueJob(new CheckWhoAmIJob());
         }
 
         account.getConfigurationStore().setReadReceipts(accountRecord.isReadReceiptsEnabled());
@@ -257,8 +262,7 @@ public class StorageHelper {
         account.getConfigurationStore().setLinkPreviews(accountRecord.isLinkPreviewsEnabled());
         account.getConfigurationStore().setPhoneNumberSharingMode(switch (accountRecord.getPhoneNumberSharingMode()) {
             case EVERYBODY -> PhoneNumberSharingMode.EVERYBODY;
-            case NOBODY -> PhoneNumberSharingMode.NOBODY;
-            case CONTACTS_ONLY -> PhoneNumberSharingMode.CONTACTS;
+            case NOBODY, UNKNOWN -> PhoneNumberSharingMode.NOBODY;
         });
         account.getConfigurationStore().setPhoneNumberUnlisted(accountRecord.isPhoneNumberUnlisted());
         account.setUsername(accountRecord.getUsername());
@@ -274,7 +278,7 @@ public class StorageHelper {
             if (profileKey != null) {
                 account.setProfileKey(profileKey);
                 final var avatarPath = accountRecord.getAvatarUrlPath().orElse(null);
-                context.getProfileHelper().downloadProfileAvatar(account.getSelfRecipientId(), avatarPath, profileKey);
+                context.getJobExecutor().enqueueJob(new DownloadProfileAvatarJob(avatarPath));
             }
         }
 

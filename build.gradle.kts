@@ -3,14 +3,18 @@ plugins {
     application
     eclipse
     `check-lib-versions`
-    id("org.graalvm.buildtools.native") version "0.9.27"
+    id("org.graalvm.buildtools.native") version "0.9.28"
 }
 
-version = "0.12.3"
+version = "0.12.4"
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
 }
 
 application {
@@ -20,12 +24,13 @@ application {
 graalvmNative {
     binaries {
         this["main"].run {
+            buildArgs.add("--install-exit-handlers")
             resources.autodetect()
             configurationFileDirectories.from(file("graalvm-config-dir"))
             if (System.getenv("GRAALVM_HOME") == null) {
                 toolchainDetection.set(true)
                 javaLauncher.set(javaToolchains.launcherFor {
-                    languageVersion.set(JavaLanguageVersion.of(17))
+                    languageVersion.set(JavaLanguageVersion.of(21))
                 })
             } else {
                 toolchainDetection.set(false)

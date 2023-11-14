@@ -126,7 +126,7 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 
 public class ManagerImpl implements Manager {
 
-    private final static Logger logger = LoggerFactory.getLogger(ManagerImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(ManagerImpl.class);
 
     private SignalAccount account;
     private final SignalDependencies dependencies;
@@ -226,6 +226,7 @@ public class ManagerImpl implements Manager {
                         e.getClass().getSimpleName());
                 logger.debug("Full CDSI refresh failed", e);
             }
+            context.getAccountHelper().checkWhoAmiI();
         }
     }
 
@@ -843,6 +844,15 @@ public class ManagerImpl implements Manager {
     }
 
     @Override
+    public void hideRecipient(final RecipientIdentifier.Single recipient) {
+        final var recipientIdOptional = context.getRecipientHelper().resolveRecipientOptional(recipient);
+        if (recipientIdOptional.isPresent()) {
+            context.getContactHelper().setContactHidden(recipientIdOptional.get(), true);
+            account.removeRecipient(recipientIdOptional.get());
+        }
+    }
+
+    @Override
     public void deleteRecipient(final RecipientIdentifier.Single recipient) {
         final var recipientIdOptional = context.getRecipientHelper().resolveRecipientOptional(recipient);
         if (recipientIdOptional.isPresent()) {
@@ -1020,7 +1030,7 @@ public class ManagerImpl implements Manager {
         if (receiveThread != null || isReceivingSynchronous) {
             return;
         }
-        receiveThread = new Thread(() -> {
+        receiveThread = Thread.ofPlatform().name("receive-" + threadNumber.getAndIncrement()).start(() -> {
             logger.debug("Starting receiving messages");
             context.getReceiveHelper().receiveMessagesContinuously(this::passReceivedMessageToHandlers);
             logger.debug("Finished receiving messages");
@@ -1034,9 +1044,6 @@ public class ManagerImpl implements Manager {
                 }
             }
         });
-        receiveThread.setName("receive-" + threadNumber.getAndIncrement());
-
-        receiveThread.start();
     }
 
     private void passReceivedMessageToHandlers(MessageEnvelope envelope, Throwable e) {
@@ -1093,6 +1100,20 @@ public class ManagerImpl implements Manager {
             Optional<Duration> timeout, Optional<Integer> maxMessages, ReceiveMessageHandler handler)
             throws IOException, AlreadyReceivingException {
         receiveMessages(timeout.orElse(Duration.ofMinutes(1)), timeout.isPresent(), maxMessages.orElse(null), handler);
+    }
+
+    @Override
+    public void stopReceiveMessages() {
+        Thread thread = null;
+        synchronized (messageHandlers) {
+            if (isReceivingSynchronous) {
+                thread = receiveThread;
+                receiveThread = null;
+            }
+        }
+        if (thread != null) {
+            stopReceiveThread(thread);
+        }
     }
 
     private void receiveMessages(
@@ -1252,18 +1273,15 @@ public class ManagerImpl implements Manager {
     public boolean trustIdentityVerified(
             RecipientIdentifier.Single recipient, IdentityVerificationCode verificationCode)
             throws UnregisteredRecipientException {
-        if (verificationCode instanceof IdentityVerificationCode.Fingerprint fingerprint) {
-            return trustIdentity(recipient,
+        return switch (verificationCode) {
+            case IdentityVerificationCode.Fingerprint fingerprint -> trustIdentity(recipient,
                     r -> context.getIdentityHelper().trustIdentityVerified(r, fingerprint.fingerprint()));
-        } else if (verificationCode instanceof IdentityVerificationCode.SafetyNumber safetyNumber) {
-            return trustIdentity(recipient,
+            case IdentityVerificationCode.SafetyNumber safetyNumber -> trustIdentity(recipient,
                     r -> context.getIdentityHelper().trustIdentityVerifiedSafetyNumber(r, safetyNumber.safetyNumber()));
-        } else if (verificationCode instanceof IdentityVerificationCode.ScannableSafetyNumber safetyNumber) {
-            return trustIdentity(recipient,
+            case IdentityVerificationCode.ScannableSafetyNumber safetyNumber -> trustIdentity(recipient,
                     r -> context.getIdentityHelper().trustIdentityVerifiedSafetyNumber(r, safetyNumber.safetyNumber()));
-        } else {
-            throw new AssertionError("Invalid verification code type");
-        }
+            case null, default -> throw new AssertionError("Invalid verification code type");
+        };
     }
 
     @Override
@@ -1313,9 +1331,11 @@ public class ManagerImpl implements Manager {
         if (thread != null) {
             stopReceiveThread(thread);
         }
-        executor.shutdown();
+        executor.close();
+        context.close();
 
         dependencies.getSignalWebSocket().disconnect();
+        dependencies.getPushServiceSocket().close();
         disposable.dispose();
 
         if (account != null) {

@@ -19,7 +19,7 @@ Windows. There's also a [docker image and some Linux packages](https://github.co
 
 System requirements:
 
-- at least Java Runtime Environment (JRE) 17
+- at least Java Runtime Environment (JRE) 21
 - native library: libsignal-client
 
   The native libs are bundled for x86_64 Linux (with recent enough glibc), Windows and MacOS. For other
@@ -128,8 +128,7 @@ It is possible to build a native binary with [GraalVM](https://www.graalvm.org).
 work in all situations.
 
 1. [Install GraalVM and setup the enviroment](https://www.graalvm.org/docs/getting-started/#install-graalvm)
-2. [Install prerequisites](https://www.graalvm.org/reference-manual/native-image/#prerequisites)
-3. Execute Gradle:
+2. Execute Gradle:
 
        ./gradlew nativeCompile
 

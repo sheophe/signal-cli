@@ -4,7 +4,6 @@ import org.asamk.signal.manager.config.ServiceConfig;
 import org.asamk.signal.manager.config.ServiceEnvironmentConfig;
 import org.signal.libsignal.metadata.certificate.CertificateValidator;
 import org.signal.libsignal.zkgroup.profiles.ClientZkProfileOperations;
-import org.whispersystems.signalservice.api.KeyBackupService;
 import org.whispersystems.signalservice.api.SignalServiceAccountManager;
 import org.whispersystems.signalservice.api.SignalServiceDataStore;
 import org.whispersystems.signalservice.api.SignalServiceMessageReceiver;
@@ -21,9 +20,9 @@ import org.whispersystems.signalservice.api.svr.SecureValueRecoveryV2;
 import org.whispersystems.signalservice.api.util.CredentialsProvider;
 import org.whispersystems.signalservice.api.util.UptimeSleepTimer;
 import org.whispersystems.signalservice.api.websocket.WebSocketFactory;
+import org.whispersystems.signalservice.internal.push.PushServiceSocket;
 import org.whispersystems.signalservice.internal.websocket.WebSocketConnection;
 
-import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
@@ -46,11 +45,11 @@ public class SignalDependencies {
     private GroupsV2Operations groupsV2Operations;
     private ClientZkOperations clientZkOperations;
 
+    private PushServiceSocket pushServiceSocket;
     private SignalWebSocket signalWebSocket;
     private SignalServiceMessageReceiver messageReceiver;
     private SignalServiceMessageSender messageSender;
 
-    private KeyBackupService keyBackupService;
     private SecureValueRecoveryV2 secureValueRecoveryV2;
     private ProfileService profileService;
     private SignalServiceCipher cipher;
@@ -72,6 +71,10 @@ public class SignalDependencies {
     }
 
     public void resetAfterAddressChange() {
+        if (this.pushServiceSocket != null) {
+            this.pushServiceSocket.close();
+            this.pushServiceSocket = null;
+        }
         this.messageSender = null;
         this.cipher = null;
         getSignalWebSocket().forceNewWebSockets();
@@ -92,13 +95,22 @@ public class SignalDependencies {
         return sessionLock;
     }
 
-    public SignalServiceAccountManager getAccountManager() {
-        return getOrCreate(() -> accountManager,
-                () -> accountManager = new SignalServiceAccountManager(serviceEnvironmentConfig.signalServiceConfiguration(),
+    public PushServiceSocket getPushServiceSocket() {
+        return getOrCreate(() -> pushServiceSocket,
+                () -> pushServiceSocket = new PushServiceSocket(serviceEnvironmentConfig.signalServiceConfiguration(),
                         credentialsProvider,
                         userAgent,
-                        getGroupsV2Operations(),
+                        getClientZkProfileOperations(),
                         ServiceConfig.AUTOMATIC_NETWORK_RETRY));
+    }
+
+    public SignalServiceAccountManager getAccountManager() {
+        return getOrCreate(() -> accountManager,
+                () -> accountManager = new SignalServiceAccountManager(getPushServiceSocket(),
+                        null,
+                        serviceEnvironmentConfig.signalServiceConfiguration(),
+                        credentialsProvider,
+                        getGroupsV2Operations()));
     }
 
     public SignalServiceAccountManager createUnauthenticatedAccountManager(String number, String password) {
@@ -165,51 +177,24 @@ public class SignalDependencies {
 
     public SignalServiceMessageReceiver getMessageReceiver() {
         return getOrCreate(() -> messageReceiver,
-                () -> messageReceiver = new SignalServiceMessageReceiver(serviceEnvironmentConfig.signalServiceConfiguration(),
-                        credentialsProvider,
-                        userAgent,
-                        getClientZkProfileOperations(),
-                        ServiceConfig.AUTOMATIC_NETWORK_RETRY));
+                () -> messageReceiver = new SignalServiceMessageReceiver(pushServiceSocket));
     }
 
     public SignalServiceMessageSender getMessageSender() {
         return getOrCreate(() -> messageSender,
-                () -> messageSender = new SignalServiceMessageSender(serviceEnvironmentConfig.signalServiceConfiguration(),
-                        credentialsProvider,
+                () -> messageSender = new SignalServiceMessageSender(credentialsProvider,
                         dataStore,
                         sessionLock,
-                        userAgent,
                         getSignalWebSocket(),
                         Optional.empty(),
-                        getClientZkProfileOperations(),
                         executor,
                         ServiceConfig.MAX_ENVELOPE_SIZE,
-                        ServiceConfig.AUTOMATIC_NETWORK_RETRY));
-    }
-
-    public KeyBackupService getKeyBackupService() {
-        return getOrCreate(() -> keyBackupService,
-                () -> keyBackupService = getAccountManager().getKeyBackupService(ServiceConfig.getIasKeyStore(),
-                        serviceEnvironmentConfig.keyBackupConfig().enclaveName(),
-                        serviceEnvironmentConfig.keyBackupConfig().serviceId(),
-                        serviceEnvironmentConfig.keyBackupConfig().mrenclave(),
-                        10));
+                        pushServiceSocket));
     }
 
     public SecureValueRecoveryV2 getSecureValueRecoveryV2() {
         return getOrCreate(() -> secureValueRecoveryV2,
                 () -> secureValueRecoveryV2 = getAccountManager().getSecureValueRecoveryV2(serviceEnvironmentConfig.svr2Mrenclave()));
-    }
-
-    public Collection<KeyBackupService> getFallbackKeyBackupServices() {
-        return serviceEnvironmentConfig.fallbackKeyBackupConfigs()
-                .stream()
-                .map(config -> getAccountManager().getKeyBackupService(ServiceConfig.getIasKeyStore(),
-                        config.enclaveName(),
-                        config.serviceId(),
-                        config.mrenclave(),
-                        10))
-                .toList();
     }
 
     public ProfileService getProfileService() {

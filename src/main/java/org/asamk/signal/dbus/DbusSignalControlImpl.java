@@ -14,6 +14,8 @@ import org.asamk.signal.manager.api.PinLockedException;
 import org.asamk.signal.manager.api.RateLimitException;
 import org.asamk.signal.manager.api.UserAlreadyExistsException;
 import org.freedesktop.dbus.DBusPath;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -24,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 
 public class DbusSignalControlImpl implements org.asamk.SignalControl {
 
+    private static final Logger logger = LoggerFactory.getLogger(DbusSignalControlImpl.class);
     private final MultiAccountManager c;
 
     private final String objectPath;
@@ -116,6 +119,15 @@ public class DbusSignalControlImpl implements org.asamk.SignalControl {
         } catch (TimeoutException | IOException e) {
             throw new SignalControl.Error.Failure(e.getClass().getSimpleName() + " " + e.getMessage());
         }
+        Thread.ofPlatform().name("dbus-link").start(() -> {
+            final ProvisioningManager provisioningManager = c.getProvisioningManagerFor(deviceLinkUri);
+            try {
+                provisioningManager.finishDeviceLink(newDeviceName);
+            } catch (IOException | TimeoutException | UserAlreadyExistsException e) {
+                logger.warn("Failed to finish linking", e);
+            }
+        });
+        return deviceLinkUri.toString();
     }
 
     @Override
