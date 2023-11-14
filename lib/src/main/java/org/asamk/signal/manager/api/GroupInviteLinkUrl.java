@@ -31,7 +31,8 @@ public final class GroupInviteLinkUrl {
      * @return null iff not a group url.
      * @throws InvalidGroupLinkException If group url, but cannot be parsed.
      */
-    public static GroupInviteLinkUrl fromUri(String urlString) throws InvalidGroupLinkException, UnknownGroupLinkVersionException {
+    public static GroupInviteLinkUrl fromUri(String urlString)
+            throws InvalidGroupLinkException, UnknownGroupLinkVersionException {
         var uri = getGroupUrl(urlString);
 
         if (uri == null) {
@@ -90,10 +91,12 @@ public final class GroupInviteLinkUrl {
     }
 
     private static String createUrl(GroupMasterKey groupMasterKey, GroupLinkPassword password) {
-        var groupInviteLink = new GroupInviteLink.Builder().v1Contents(new GroupInviteLink.GroupInviteLinkContentsV1.Builder().groupMasterKey(
+        var groupInviteLink = new GroupInviteLink.Builder()
+                .v1Contents(new GroupInviteLink.GroupInviteLinkContentsV1.Builder().groupMasterKey(
                         ByteString.of(groupMasterKey.serialize()))
-                .inviteLinkPassword(ByteString.of(password.serialize()))
-                .build()).build();
+                        .inviteLinkPassword(ByteString.of(password.serialize()))
+                        .build())
+                .build();
 
         var encoding = Base64.encodeUrlSafeWithoutPadding(groupInviteLink.encode());
 
