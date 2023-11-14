@@ -60,8 +60,7 @@ public class SignalDependencies {
             final CredentialsProvider credentialsProvider,
             final SignalServiceDataStore dataStore,
             final ExecutorService executor,
-            final SignalSessionLock sessionLock
-    ) {
+            final SignalSessionLock sessionLock) {
         this.serviceEnvironmentConfig = serviceEnvironmentConfig;
         this.userAgent = userAgent;
         this.credentialsProvider = credentialsProvider;
@@ -131,13 +130,15 @@ public class SignalDependencies {
 
     public GroupsV2Operations getGroupsV2Operations() {
         return getOrCreate(() -> groupsV2Operations,
-                () -> groupsV2Operations = new GroupsV2Operations(ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()),
+                () -> groupsV2Operations = new GroupsV2Operations(
+                        ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()),
                         ServiceConfig.GROUP_MAX_SIZE));
     }
 
     private ClientZkOperations getClientZkOperations() {
         return getOrCreate(() -> clientZkOperations,
-                () -> clientZkOperations = ClientZkOperations.create(serviceEnvironmentConfig.signalServiceConfiguration()));
+                () -> clientZkOperations = ClientZkOperations
+                        .create(serviceEnvironmentConfig.signalServiceConfiguration()));
     }
 
     private ClientZkProfileOperations getClientZkProfileOperations() {
@@ -194,7 +195,8 @@ public class SignalDependencies {
 
     public SecureValueRecoveryV2 getSecureValueRecoveryV2() {
         return getOrCreate(() -> secureValueRecoveryV2,
-                () -> secureValueRecoveryV2 = getAccountManager().getSecureValueRecoveryV2(serviceEnvironmentConfig.svr2Mrenclave()));
+                () -> secureValueRecoveryV2 = getAccountManager()
+                        .getSecureValueRecoveryV2(serviceEnvironmentConfig.svr2Mrenclave()));
     }
 
     public ProfileService getProfileService() {
@@ -206,7 +208,8 @@ public class SignalDependencies {
 
     public SignalServiceCipher getCipher() {
         return getOrCreate(() -> cipher, () -> {
-            final var certificateValidator = new CertificateValidator(serviceEnvironmentConfig.unidentifiedSenderTrustRoot());
+            final var certificateValidator = new CertificateValidator(
+                    serviceEnvironmentConfig.unidentifiedSenderTrustRoot());
             final var address = new SignalServiceAddress(credentialsProvider.getAci(), credentialsProvider.getE164());
             final var deviceId = credentialsProvider.getDeviceId();
             cipher = new SignalServiceCipher(address, deviceId, dataStore.aci(), sessionLock, certificateValidator);
